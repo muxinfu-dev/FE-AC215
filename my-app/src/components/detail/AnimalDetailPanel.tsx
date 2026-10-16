@@ -1,19 +1,26 @@
 // src/components/detail/AnimalDetailPanel.tsx
 // 右侧详情面板：传入一只动物，显示它的全部信息
+// 关闭、勾选、Dismiss 都通过回调通知 DashboardPage，面板自己不改数据
 
 import type { ReactNode } from "react";
 import { Camera, History, Info, X } from "lucide-react";
-import type { ActionLog, Animal, Suggestion } from "@/types/animal";
+import type { ActionLog, Animal, Suggestion, SuggestionStatus } from "@/types/animal";
 import { formatShortDate } from "@/lib/format";
 import AnimalPhoto from "@/components/common/AnimalPhoto";
 
 interface AnimalDetailPanelProps {
   animal: Animal;
+  onClose: () => void;
+  onSuggestionChange: (suggestionId: string, status: SuggestionStatus) => void;
 }
 
-export default function AnimalDetailPanel({ animal }: AnimalDetailPanelProps) {
-  // 只显示还没处理的建议
-  const openSuggestions = animal.suggestions.filter((s) => s.status === "open");
+export default function AnimalDetailPanel({
+  animal,
+  onClose,
+  onSuggestionChange,
+}: AnimalDetailPanelProps) {
+  // Dismiss 掉的不显示；已完成的保留（打勾 + 划线），可以取消勾选
+  const visibleSuggestions = animal.suggestions.filter((s) => s.status !== "dismissed");
 
   return (
     <aside className="w-[400px] shrink-0 overflow-y-auto border-l border-slate-200 bg-white px-6 py-8">
@@ -25,7 +32,11 @@ export default function AnimalDetailPanel({ animal }: AnimalDetailPanelProps) {
             ID: #{animal.id} • {animal.daysInShelter} days in shelter
           </p>
         </div>
-        <button className="rounded-full p-2 text-slate-500 hover:bg-slate-100">
+        <button
+          onClick={onClose}
+          aria-label="Close panel"
+          className="rounded-full p-2 text-slate-500 hover:bg-slate-100"
+        >
           <X className="size-5" />
         </button>
       </div>
@@ -72,8 +83,15 @@ export default function AnimalDetailPanel({ animal }: AnimalDetailPanelProps) {
           How we can help {animal.name}
         </h3>
         <div className="mt-3 flex flex-col gap-3">
-          {openSuggestions.length > 0 ? (
-            openSuggestions.map((s) => <SuggestionCard key={s.id} suggestion={s} />)
+          {visibleSuggestions.length > 0 ? (
+            visibleSuggestions.map((s) => (
+              <SuggestionCard
+                key={s.id}
+                suggestion={s}
+                onToggle={() => onSuggestionChange(s.id, s.status === "done" ? "open" : "done")}
+                onDismiss={() => onSuggestionChange(s.id, "dismissed")}
+              />
+            ))
           ) : (
             <p className="text-sm text-slate-500">No suggestions right now.</p>
           )}
@@ -120,19 +138,40 @@ function SectionTitle({ children }: { children: ReactNode }) {
   );
 }
 
-function SuggestionCard({ suggestion }: { suggestion: Suggestion }) {
+function SuggestionCard({
+  suggestion,
+  onToggle,
+  onDismiss,
+}: {
+  suggestion: Suggestion;
+  onToggle: () => void;
+  onDismiss: () => void;
+}) {
+  const done = suggestion.status === "done";
   return (
-    <div className="rounded-xl border border-slate-200 p-4">
-      <p className="text-sm text-slate-900">{suggestion.message}</p>
+    <div className={"rounded-xl border p-4 transition " + (done ? "border-teal-200 bg-teal-50/50" : "border-slate-200")}>
+      <p className={"text-sm " + (done ? "text-slate-400 line-through" : "text-slate-900")}>
+        {suggestion.message}
+      </p>
       <div className="mt-3 flex items-center justify-between">
-        {/* label 包住 checkbox：点文字也能勾选 */}
+        {/* checked 来自数据，onChange 通知上层：受控 checkbox */}
         <label className="flex cursor-pointer items-center gap-2 text-sm font-semibold text-teal-700">
-          <input type="checkbox" className="size-4 accent-teal-600" />
+          <input
+            type="checkbox"
+            checked={done}
+            onChange={onToggle}
+            className="size-4 accent-teal-600"
+          />
           {suggestion.actionLabel}
         </label>
-        <button className="text-xs text-slate-400 underline underline-offset-2 hover:text-slate-600">
-          Dismiss
-        </button>
+        {!done && (
+          <button
+            onClick={onDismiss}
+            className="text-xs text-slate-400 underline underline-offset-2 hover:text-slate-600"
+          >
+            Dismiss
+          </button>
+        )}
       </div>
     </div>
   );
